@@ -24,101 +24,131 @@ PALETTE = [
     "#9FD3C7", "#8CC7D8", "#86B3E3", "#8E9DE6", "#A294E4",
     "#BB92DB", "#D791C6", "#E79AA9", "#EDAE92",
 ]
-INK = (38, 37, 58)
+INK = (31, 30, 51)
 
+# The CSS forces a light look with dark text, so the app is readable even when
+# the visitor's browser or Streamlit is set to dark mode.
 CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
 
 :root {
-  --bg: #F5F4F9;
+  color-scheme: light;
+  --bg: #F2F1F8;
   --card: #FFFFFF;
-  --ink: #26253A;
-  --muted: #767489;
-  --line: #E6E4F0;
-  --accent: #6F7AD1;
-  --soft: #ECEEFA;
+  --ink: #1F1E33;
+  --muted: #5B5970;
+  --line: #DAD8EA;
+  --accent: #5B66C4;
+  --soft: #E8EAF8;
 }
+html, body { color-scheme: light; }
 
-.stApp { background: var(--bg); color: var(--ink); }
-.stApp p, .stApp label, .stApp li, .stApp button, .stApp input,
-.stApp [data-baseweb="tab"] { font-family: 'Plus Jakarta Sans', sans-serif; }
-[data-testid="stHeader"] { background: transparent; }
+/* Base: light surfaces, dark text everywhere */
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { background: var(--bg) !important; }
+.stApp, .stApp :where(p, span, label, li, h1, h2, h3, h4, h5, small, a) { color: var(--ink) !important; }
+.stApp :where(p, label, li, button, input, small) { font-family: 'Plus Jakarta Sans', sans-serif; }
+.block-container { max-width: 1080px; padding-top: 2.4rem; padding-bottom: 4rem; }
 #MainMenu, footer { visibility: hidden; }
-.block-container { max-width: 1080px; padding-top: 2.6rem; padding-bottom: 4rem; }
+
+/* Top bar and its icons (star, pencil, GitHub, share) */
+[data-testid="stHeader"] { background: var(--bg) !important; }
+.stApp [data-testid="stHeader"] :where(button, a, span, p, svg) { color: var(--ink) !important; fill: var(--ink) !important; }
 
 /* Sidebar */
-[data-testid="stSidebar"] { background: var(--card); border-right: 1px solid var(--line); }
+[data-testid="stSidebar"] { background: var(--card) !important; border-right: 1px solid var(--line); }
+[data-testid="stSidebarContent"] { background: transparent !important; }
 [data-testid="stSidebar"] .block-container { padding-top: 2rem; }
-.ag-side-title { font-size: 0.95rem; font-weight: 600; color: var(--ink); margin: 0 0 .6rem 0; }
-.ag-side-text { font-size: .88rem; line-height: 1.7; color: var(--muted); margin: 0 0 1.6rem 0; }
-.ag-side-text b { color: var(--ink); font-weight: 500; }
-[data-testid="stWidgetLabel"] p { font-size: .86rem; color: var(--ink); }
+.ag-side-title { font-size: .98rem; font-weight: 600; margin: 0 0 .6rem 0; }
+.stApp .ag-side-text { font-size: .9rem; line-height: 1.65; color: var(--muted) !important; margin: 0 0 1rem 0; }
+.ag-meta { margin-bottom: 1.8rem; }
+.ag-meta div { padding: 9px 0; border-top: 1px solid var(--line); }
+.stApp .ag-meta span { display: block; font-size: .76rem; color: var(--muted) !important; }
+.ag-meta b { display: block; font-size: .92rem; font-weight: 500; color: var(--ink); }
+.ag-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.8rem; }
+.ag-legend span { border-radius: 99px; padding: 4px 11px; font-size: .78rem; font-weight: 600; }
+[data-testid="stWidgetLabel"] p { font-size: .88rem; font-weight: 500; }
 
 /* Hero */
 .ag-hero h1 {
   font-family: 'Instrument Serif', serif; font-weight: 400;
   font-size: clamp(2.6rem, 5.4vw, 4rem); line-height: 1.05;
-  letter-spacing: -0.01em; margin: 0 0 .9rem 0; color: var(--ink); padding: 0;
+  letter-spacing: -0.01em; margin: 0 0 .9rem 0; padding: 0;
 }
-.ag-hero p { font-size: 1.05rem; line-height: 1.65; color: var(--muted); max-width: 34em; margin: 0 0 1.1rem 0; }
+.stApp .ag-hero p { font-size: 1.06rem; line-height: 1.65; color: var(--muted) !important; max-width: 34em; margin: 0 0 1.1rem 0; }
 .ag-strip { display: flex; width: 150px; height: 6px; border-radius: 99px; overflow: hidden; margin-bottom: 2rem; }
 .ag-strip i { flex: 1; }
 
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] { gap: 6px; border-bottom: none; margin-bottom: 1rem; }
-.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
+/* Main tabs: outlined pills, the active one is filled dark */
+.stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: none !important; margin-bottom: 1.1rem; background: transparent !important; }
+.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; }
 .stTabs [data-baseweb="tab"] {
-  height: 42px; border-radius: 99px; padding: 0 20px; background: transparent; color: var(--muted);
+  height: 44px; border-radius: 99px; padding: 0 22px;
+  background: var(--card) !important; border: 1px solid var(--line);
 }
-.stTabs [data-baseweb="tab"] p { font-size: .95rem; font-weight: 500; }
-.stTabs [aria-selected="true"] {
-  background: var(--card); color: var(--ink);
-  box-shadow: 0 1px 2px rgba(38,37,58,.06), 0 6px 18px -8px rgba(38,37,58,.14);
-}
+.stApp .stTabs [data-baseweb="tab"] p { font-size: .95rem; font-weight: 500; color: var(--ink) !important; }
+.stTabs [aria-selected="true"] { background: var(--ink) !important; border-color: var(--ink); }
+.stApp .stTabs [aria-selected="true"] p { color: #FFFFFF !important; }
 
-/* Upload */
-[data-testid="stFileUploaderDropzone"] {
-  background: var(--card); border: 1.5px dashed #C7CAE8; border-radius: 24px; padding: 2.2rem 1.5rem;
+/* Photo source switch (Upload / Camera), same pill style */
+.stApp [data-testid="stRadio"] [role="radiogroup"] { gap: 8px; flex-wrap: wrap; }
+.stApp [data-testid="stRadio"] label {
+  background: var(--card); border: 1px solid var(--line); border-radius: 99px;
+  padding: 8px 20px; margin: 0; cursor: pointer;
 }
-[data-testid="stFileUploaderDropzone"] button {
-  border-radius: 99px; border: 1px solid var(--line); background: var(--soft); color: var(--ink);
+.stApp [data-testid="stRadio"] label > div:first-of-type { display: none; }
+.stApp [data-testid="stRadio"] label:has(input:checked) { background: var(--ink); border-color: var(--ink); }
+.stApp [data-testid="stRadio"] label:has(input:checked) * { color: #FFFFFF !important; }
+
+/* Upload and camera */
+.stApp [data-testid="stFileUploaderDropzone"] {
+  background: var(--card) !important; border: 1.5px dashed #9FA5DA; border-radius: 24px; padding: 2.4rem 1.5rem;
 }
+.stApp [data-testid="stFileUploaderDropzone"] button {
+  border-radius: 99px; border: 1px solid var(--ink); background: var(--card) !important;
+}
+.stApp [data-testid="stFileUploaderDropzoneInstructions"] :where(span, small) { color: var(--muted) !important; }
+.stApp [data-testid="stCameraInput"] { border-radius: 24px; overflow: hidden; }
+.stApp [data-testid="stCameraInput"] button { border-radius: 99px; border: none; background: var(--ink) !important; }
+.stApp [data-testid="stCameraInput"] button * { color: #FFFFFF !important; }
+
+/* Buttons */
+.stApp .stDownloadButton button {
+  border-radius: 99px; border: none; background: var(--ink) !important; padding: .6rem 1.5rem;
+}
+.stApp .stDownloadButton button * { color: #FFFFFF !important; font-weight: 500; }
 
 /* Cards */
 .ag-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 1.5rem 1.6rem;
-  box-shadow: 0 1px 2px rgba(38,37,58,.04), 0 14px 34px -16px rgba(38,37,58,.14);
+  box-shadow: 0 1px 2px rgba(31,30,51,.05), 0 14px 34px -16px rgba(31,30,51,.16);
   margin-bottom: 1.2rem;
 }
-.ag-card h3 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 1.7rem; margin: 0 0 .35rem 0; color: var(--ink); padding: 0; }
-.ag-note { font-size: .92rem; line-height: 1.6; color: var(--muted); margin: 0 0 1rem 0; max-width: 42em; }
+.ag-card h3 { font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 1.75rem; margin: 0 0 .35rem 0; padding: 0; }
+.stApp .ag-note { font-size: .93rem; line-height: 1.6; color: var(--muted) !important; margin: 0 0 1rem 0; max-width: 42em; }
 .ag-photo { width: 100%; display: block; border-radius: 16px; }
-.ag-cap { font-size: .85rem; color: var(--muted); margin: .7rem 0 0 .2rem; }
+.stApp .ag-cap { font-size: .86rem; color: var(--muted) !important; margin: .7rem 0 0 .2rem; }
 
 /* Empty state */
-.ag-empty { margin-top: 1.2rem; padding: 1.2rem 1.6rem; border-radius: 20px; background: var(--soft); color: var(--ink); }
-.ag-empty p { margin: 0 0 .5rem 0; font-weight: 600; font-size: .95rem; }
-.ag-empty ul { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: .92rem; line-height: 1.8; }
+.ag-empty { margin-top: 1.2rem; padding: 1.3rem 1.7rem; border-radius: 20px; background: var(--soft); }
+.ag-empty p { margin: 0 0 .5rem 0; font-weight: 600; font-size: .98rem; }
+.ag-empty ul { margin: 0; padding-left: 1.1rem; font-size: .93rem; line-height: 1.85; }
+.stApp .ag-empty li { color: var(--muted) !important; }
 
 /* Results */
-.ag-count { font-family: 'Instrument Serif', serif; font-size: 1.9rem; margin: 1.6rem 0 .3rem 0; color: var(--ink); }
+.ag-count { font-family: 'Instrument Serif', serif; font-size: 1.95rem; margin: 1.4rem 0 .3rem 0; color: var(--ink); }
 .ag-spectrum { display: grid; grid-template-columns: repeat(auto-fit, minmax(86px, 1fr)); gap: 8px; margin: .8rem 0 1.4rem 0; }
 .ag-chip { border-radius: 14px; padding: 10px 6px; text-align: center; color: var(--ink); }
-.ag-chip b { display: block; font-size: .92rem; font-weight: 600; }
-.ag-chip span { font-size: .78rem; color: rgba(38,37,58,.7); }
+.ag-chip b { display: block; font-size: .93rem; font-weight: 600; }
+.stApp .ag-chip span { font-size: .78rem; color: rgba(31,30,51,.75) !important; }
 .ag-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
 .ag-row:first-child { border-top: none; }
 .ag-dot { width: 12px; height: 12px; border-radius: 99px; flex: none; }
 .ag-grp { width: 64px; font-weight: 600; font-size: .95rem; flex: none; }
 .ag-bar { flex: 1; height: 8px; border-radius: 99px; background: var(--soft); overflow: hidden; }
 .ag-bar i { display: block; height: 100%; border-radius: 99px; }
-.ag-pct { width: 46px; text-align: right; font-size: .9rem; color: var(--muted); flex: none; }
-.ag-hint { margin-top: 1rem; padding: 12px 16px; border-radius: 14px; background: #FBF3E6; color: #6B5636; font-size: .9rem; line-height: 1.55; }
-
-/* Legend (sidebar) */
-.ag-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.6rem; }
-.ag-legend span { border-radius: 99px; padding: 4px 11px; font-size: .78rem; font-weight: 500; color: var(--ink); }
+.stApp .ag-pct { width: 46px; text-align: right; font-size: .9rem; color: var(--muted) !important; flex: none; }
+.ag-hint { margin: 1rem 0; padding: 12px 16px; border-radius: 14px; background: #FBF1DE; color: #5E4A2A; font-size: .92rem; line-height: 1.55; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -243,11 +273,13 @@ color_map = {n: PALETTE[i % len(PALETTE)] for i, n in enumerate(ordered)}
 with st.sidebar:
     st.markdown('<p class="ag-side-title">About this project</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="ag-side-text"><b>Age Group Detection</b><br>'
-        "A YOLOv8 model trained on custom data to find people in a photo and estimate an age range for each.<br><br>"
-        "<b>Model</b> YOLOv8, custom trained<br>"
-        "<b>Built with</b> Ultralytics and Streamlit<br>"
-        "<b>By</b> Areeba Luqman, BSCS Final Year Project</p>",
+        '<p class="ag-side-text">Finds people in a photo and estimates an age range for each one.</p>'
+        '<div class="ag-meta">'
+        "<div><span>Model</span><b>YOLOv8, custom trained</b></div>"
+        "<div><span>Built with</span><b>Ultralytics and Streamlit</b></div>"
+        "<div><span>Created by</span><b>Areeba Luqman</b></div>"
+        "<div><span>Project</span><b>BSCS Final Year Project</b></div>"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -271,7 +303,7 @@ with st.sidebar:
 strip = "".join(f'<i style="background:{color_map[n]}"></i>' for n in ordered)
 st.markdown(
     '<div class="ag-hero"><h1>Age Group Detection</h1>'
-    "<p>Upload a photo. The model finds each person in it and estimates an age range.</p>"
+    "<p>Upload a photo or take one with your camera. The model finds each person and estimates an age range.</p>"
     f'<div class="ag-strip">{strip}</div></div>',
     unsafe_allow_html=True,
 )
@@ -282,22 +314,34 @@ tab1, tab2 = st.tabs(["Detection", "Model performance"])
 # Tab 1: Detection
 # ---------------------------------------------------------------------------
 with tab1:
-    uploaded = st.file_uploader(
-        "Upload a photo", type=["jpg", "jpeg", "png"], label_visibility="collapsed"
+    mode = st.radio(
+        "Photo source",
+        ["Upload a photo", "Use camera"],
+        horizontal=True,
+        label_visibility="collapsed",
     )
 
-    if uploaded is None:
+    if mode == "Use camera":
+        source = st.camera_input("Take a photo", label_visibility="collapsed")
+    else:
+        source = st.file_uploader(
+            "Upload a photo", type=["jpg", "jpeg", "png"], label_visibility="collapsed"
+        )
+
+    if source is None:
+        extra = "<li>Allow camera access when your browser asks</li>" if mode == "Use camera" else ""
         st.markdown(
             '<div class="ag-empty"><p>Add a photo to begin</p><ul>'
             "<li>Clear, front-facing faces give the best results</li>"
             "<li>Good lighting helps the model tell age groups apart</li>"
+            f"{extra}"
             "<li>Your photo is processed in memory and never saved</li>"
             "</ul></div>",
             unsafe_allow_html=True,
         )
     else:
         try:
-            image = ImageOps.exif_transpose(Image.open(uploaded)).convert("RGB")
+            image = ImageOps.exif_transpose(Image.open(source)).convert("RGB")
         except Exception:
             st.error("This file could not be read as an image. Try another JPG or PNG.")
             st.stop()
@@ -310,6 +354,7 @@ with tab1:
         n = 0 if boxes is None else len(boxes)
         annotated = annotate(image, boxes, names, color_map) if n else image
 
+        st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
         left, right = st.columns(2, gap="medium")
         with left:
             st.markdown(
@@ -339,6 +384,15 @@ with tab1:
             counts = {}
             for name, _ in dets:
                 counts[name] = counts.get(name, 0) + 1
+
+            buf = io.BytesIO()
+            annotated.save(buf, format="PNG")
+            st.download_button(
+                "Download result",
+                data=buf.getvalue(),
+                file_name="age-detection-result.png",
+                mime="image/png",
+            )
 
             st.markdown(
                 f'<div class="ag-count">{n} detection{"s" if n != 1 else ""}</div>',
