@@ -80,25 +80,25 @@ html, body { color-scheme: light; }
 .ag-strip i { flex: 1; }
 
 /* Main tabs: outlined pills, the active one is filled dark */
-.stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: none !important; margin-bottom: 1.1rem; background: transparent !important; }
-.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; }
-.stTabs [data-baseweb="tab"] {
-  height: 44px; border-radius: 99px; padding: 0 22px;
-  background: var(--card) !important; border: 1px solid var(--line);
+.stTabs [data-baseweb="tab-list"] { gap: 10px; border-bottom: none !important; margin-bottom: 1.1rem; background: transparent !important; }
+.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; height: 0 !important; }
+.stTabs button[data-baseweb="tab"] {
+  height: 44px !important; border-radius: 99px !important; padding: 0 24px !important;
+  background: var(--card) !important; border: 1px solid var(--line) !important;
 }
-.stApp .stTabs [data-baseweb="tab"] p { font-size: .95rem; font-weight: 500; color: var(--ink) !important; }
-.stTabs [aria-selected="true"] { background: var(--ink) !important; border-color: var(--ink); }
-.stApp .stTabs [aria-selected="true"] p { color: #FFFFFF !important; }
+.stApp .stTabs button[data-baseweb="tab"] p { font-size: .95rem; font-weight: 500; color: var(--ink) !important; }
+.stTabs button[aria-selected="true"] { background: var(--ink) !important; border-color: var(--ink) !important; }
+.stApp .stTabs button[aria-selected="true"] p { color: #FFFFFF !important; }
 
-/* Photo source switch (Upload / Camera), same pill style */
-.stApp [data-testid="stRadio"] [role="radiogroup"] { gap: 8px; flex-wrap: wrap; }
-.stApp [data-testid="stRadio"] label {
-  background: var(--card); border: 1px solid var(--line); border-radius: 99px;
-  padding: 8px 20px; margin: 0; cursor: pointer;
+/* Photo source switch (Upload / Camera): two pill buttons, the active one is dark */
+.stApp [data-testid="stBaseButton-secondary"], .stApp [data-testid="baseButton-secondary"],
+.stApp [data-testid="stBaseButton-primary"], .stApp [data-testid="baseButton-primary"] {
+  border-radius: 99px; padding: .55rem 1.5rem; border: 1px solid var(--line); background: var(--card) !important;
 }
-.stApp [data-testid="stRadio"] label > div:first-of-type { display: none; }
-.stApp [data-testid="stRadio"] label:has(input:checked) { background: var(--ink); border-color: var(--ink); }
-.stApp [data-testid="stRadio"] label:has(input:checked) * { color: #FFFFFF !important; }
+.stApp [data-testid="stBaseButton-primary"], .stApp [data-testid="baseButton-primary"] {
+  background: var(--ink) !important; border-color: var(--ink);
+}
+.stApp [data-testid="stBaseButton-primary"] *, .stApp [data-testid="baseButton-primary"] * { color: #FFFFFF !important; }
 
 /* Upload and camera */
 .stApp [data-testid="stFileUploaderDropzone"] {
@@ -314,12 +314,24 @@ tab1, tab2 = st.tabs(["Detection", "Model performance"])
 # Tab 1: Detection
 # ---------------------------------------------------------------------------
 with tab1:
-    mode = st.radio(
-        "Photo source",
-        ["Upload a photo", "Use camera"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+    if "mode" not in st.session_state:
+        st.session_state.mode = "upload"
+
+    def set_mode(m):
+        st.session_state.mode = m
+
+    b1, b2, _ = st.columns([1.3, 1.3, 4], gap="small")
+    with b1:
+        st.button(
+            "Upload a photo", key="mode_upload", on_click=set_mode, args=("upload",),
+            type="primary" if st.session_state.mode == "upload" else "secondary",
+        )
+    with b2:
+        st.button(
+            "Use camera", key="mode_camera", on_click=set_mode, args=("camera",),
+            type="primary" if st.session_state.mode == "camera" else "secondary",
+        )
+    mode = "Use camera" if st.session_state.mode == "camera" else "Upload a photo"
 
     if mode == "Use camera":
         source = st.camera_input("Take a photo", label_visibility="collapsed")
