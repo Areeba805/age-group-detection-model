@@ -222,7 +222,6 @@ ICON_SCAN = (
 )
 ICON_CHART = '<svg viewBox="0 0 24 24"><path d="M5 19v-8"/><path d="M12 19V5"/><path d="M19 19v-6"/></svg>'
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -231,11 +230,9 @@ def age_key(name: str) -> int:
     m = re.match(r"\d+", str(name))
     return int(m.group()) if m else 999
 
-
 def hex_to_rgb(h: str):
     h = h.lstrip("#")
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
 
 @lru_cache(maxsize=16)
 def load_font(size: int):
@@ -244,23 +241,19 @@ def load_font(size: int):
     except Exception:
         return ImageFont.load_default()
 
-
 def to_data_uri(img: Image.Image, quality: int = 90) -> str:
     buf = io.BytesIO()
     img.convert("RGB").save(buf, format="JPEG", quality=quality)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-
 
 @st.cache_data(show_spinner=False)
 def file_data_uri(path: str) -> str:
     data = Path(path).read_bytes()
     return "data:image/png;base64," + base64.b64encode(data).decode()
 
-
 @st.cache_resource(show_spinner="Loading model...")
 def load_model(path: str):
     return YOLO(path)
-
 
 def find_image(*names):
     for n in names:
@@ -268,7 +261,6 @@ def find_image(*names):
         if p.exists():
             return p
     return None
-
 
 def get_metrics(model):
     """Read the validation metrics saved inside best.pt, if present."""
@@ -284,7 +276,6 @@ def get_metrics(model):
         return [(label, float(tm[k])) for label, k in keys if k in tm]
     except Exception:
         return []
-
 
 def draw_boxes(image: Image.Image, items, color_map) -> Image.Image:
     """Draw soft rounded boxes with a colour-coded label pill.
@@ -316,14 +307,12 @@ def draw_boxes(image: Image.Image, items, color_map) -> Image.Image:
         draw.text((px + padx - tb[0], py + pady - tb[1]), label, font=font, fill=INK + (255,))
     return img
 
-
 def annotate(image: Image.Image, boxes, names, color_map) -> Image.Image:
     items = []
     for b in boxes:
         x1, y1, x2, y2 = [float(v) for v in b.xyxy[0].tolist()]
         items.append((x1, y1, x2, y2, names[int(b.cls[0])], float(b.conf[0])))
     return draw_boxes(image, items, color_map)
-
 
 def spectrum_html(ordered, counts, color_map, suffix="") -> str:
     chips = []
@@ -333,7 +322,6 @@ def spectrum_html(ordered, counts, color_map, suffix="") -> str:
         label = f"{c}{suffix}" if c else "none"
         chips.append(f'<div class="ag-chip" style="background:{bg}"><b>{n}</b><span>{label}</span></div>')
     return '<div class="ag-spectrum">' + "".join(chips) + "</div>"
-
 
 def rows_html(dets, color_map) -> str:
     out = []
@@ -346,7 +334,6 @@ def rows_html(dets, color_map) -> str:
             f'<span class="ag-pct">{conf:.0%}</span></div>'
         )
     return "".join(out)
-
 
 def steps_html(color_map, ordered, kind="photo") -> str:
     c = [color_map[ordered[i]] for i in (0, 4, 7)] if len(ordered) >= 8 else ["#9FD3C7", "#A294E4", "#E79AA9"]
@@ -369,13 +356,14 @@ def steps_html(color_map, ordered, kind="photo") -> str:
     )
     return f'<div class="ag-steps">{cards}</div>'
 
-
 # ---------------------------------------------------------------------------
 # Video
 # ---------------------------------------------------------------------------
 MAX_SECONDS = 20   # longer videos are trimmed to keep processing quick
 MAX_SIDE = 720     # frames are scaled down so their longest side is at most this
-
+# --- STABILITY FIX: low-confidence votes ko ignore karo ---
+MIN_VOTE_CONF = 0.40   # 40% se kam wali prediction vote nahi karegi
+TRACK_MAX_MISSED = 30  # banda 30 frames tak ghayab ho to bhi usi ID pe rakho
 
 def iou_xyxy(a, b) -> float:
     ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
@@ -384,23 +372,41 @@ def iou_xyxy(a, b) -> float:
     union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
     return inter / union if union > 0 else 0.0
 
+def dedupe(dets, thr=0.5):
+    """Keep one box per face: drop a box that overlaps a more confident one."""
+    kept = []
+    for d in sorted(dets, key=lambda d: d[2], reverse=True):
+        if all(iou_xyxy(d[0], k[0]) < thr for k in kept):
+            kept.append(d)
+    return kept
 
 class SimpleTracker:
-    """Follows each person across frames so the age label stays steady.
-    Every track votes (weighted by confidence) for an age group; the winner is shown."""
+    """Follows each person across frames. Every person (track) collects confidence-weighted
+    votes for an age group, so the final label reflects the whole video, not one frame."""
 
-    def __init__(self, iou_thr=0.3, max_missed=8, min_hits=3):
-        self.iou_thr, self.max_missed, self.min_hits = iou_thr, max_missed, min_hits
-        self.tracks, self.done = [], []
+    def __init__(self, min_iou=0.10, max_missed=TRACK_MAX_MISSED):
+        self.min_iou, self.max_missed = min_iou, max_missed
+        self.tracks, self.done, self._next = [], [], 1
+
+    def _score(self, t_box, d_box):
+        v = iou_xyxy(t_box, d_box)
+        if v >= self.min_iou:
+            return 1.0 + v
+        # fast movers: also accept a box whose centre is close to the previous one
+        dx = ((t_box[0] + t_box[2]) - (d_box[0] + d_box[2])) / 2
+        dy = ((t_box[1] + t_box[3]) - (d_box[1] + d_box[3])) / 2
+        dist = (dx * dx + dy * dy) ** 0.5
+        limit = 0.75 * max(t_box[2] - t_box[0], t_box[3] - t_box[1], 1.0)
+        return 1.0 - dist / limit if dist < limit else 0.0
 
     def update(self, dets):
-        """dets: list of (box, class_id, confidence). Returns the same list with steady class ids."""
+        """dets: list of (box, class_id, confidence). Returns list of (box, track_id, confidence)."""
         pairs = []
         for ti, t in enumerate(self.tracks):
             for di, d in enumerate(dets):
-                v = iou_xyxy(t["box"], d[0])
-                if v >= self.iou_thr:
-                    pairs.append((v, ti, di))
+                sc = self._score(t["box"], d[0])
+                if sc > 0:
+                    pairs.append((sc, ti, di))
         pairs.sort(reverse=True)
 
         used_t, assigned = set(), {}
@@ -409,34 +415,39 @@ class SimpleTracker:
                 continue
             used_t.add(ti)
             assigned[di] = self.tracks[ti]
-
         for ti, t in enumerate(self.tracks):
             if ti not in used_t:
                 t["missed"] += 1
+
+        out = []
         for di, (box, cls, conf) in enumerate(dets):
-            if di in assigned:
-                t = assigned[di]
-                t["box"], t["missed"] = box, 0
-                t["hits"] += 1
-                t["votes"][cls] = t["votes"].get(cls, 0.0) + conf
-            else:
-                t = {"box": box, "hits": 1, "missed": 0, "votes": {cls: conf}}
+            t = assigned.get(di)
+            if t is None:
+                t = {"id": self._next, "box": box, "hits": 0, "missed": 0, "votes": {}, "n": {}}
+                self._next += 1
                 self.tracks.append(t)
-                assigned[di] = t
+            t["box"], t["missed"] = box, 0
+            t["hits"] += 1
+            # FIX: sirf sure predictions hi vote karengi, 28% wali nahi
+            if conf >= MIN_VOTE_CONF:
+                t["votes"][cls] = t["votes"].get(cls, 0.0) + conf
+                t["n"][cls] = t["n"].get(cls, 0) + 1
+            out.append((box, t["id"], conf))
 
         alive = []
         for t in self.tracks:
             (self.done if t["missed"] > self.max_missed else alive).append(t)
         self.tracks = alive
+        return out
 
-        return [(box, max(assigned[di]["votes"], key=assigned[di]["votes"].get), conf)
-                for di, (box, cls, conf) in enumerate(dets)]
-
-    def people(self):
-        """Final age group of every person who was seen in enough frames."""
-        return [max(t["votes"], key=t["votes"].get)
-                for t in self.tracks + self.done if t["hits"] >= self.min_hits]
-
+    def final(self, min_hits=3):
+        """track id -> (winning age group id, its average confidence). Very short tracks are ignored."""
+        res = {}
+        for t in self.tracks + self.done:
+            if t["hits"] >= min_hits and t["votes"]:
+                cls = max(t["votes"], key=t["votes"].get)
+                res[t["id"]] = (cls, t["votes"][cls] / t["n"][cls])
+        return res
 
 class VideoOut:
     """Writes an H.264 mp4 that browsers can play. Falls back to mp4v (download only)."""
@@ -473,6 +484,24 @@ class VideoOut:
         if self._cv is not None:
             self._cv.release()
 
+def read_frames(path, max_frames):
+    """Yield (index, BGR frame) scaled down, with even width and height."""
+    cap = cv2.VideoCapture(path)
+    try:
+        idx = 0
+        while idx < max_frames:
+            ok, frame = cap.read()
+            if not ok:
+                return
+            h, w = frame.shape[:2]
+            scale = min(1.0, MAX_SIDE / max(h, w))
+            if scale < 1.0:
+                frame = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+            h, w = frame.shape[:2]
+            yield idx, frame[: h - h % 2, : w - w % 2]      # H.264 needs even sizes
+            idx += 1
+    finally:
+        cap.release()
 
 def process_video(in_path, out_path, model, names, color_map, conf, iou, stride, on_progress=None):
     cap = cv2.VideoCapture(in_path)
@@ -482,60 +511,68 @@ def process_video(in_path, out_path, model, names, color_map, conf, iou, stride,
     if fps <= 0 or fps > 120:
         fps = 25.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    cap.release()
     max_frames = int(fps * MAX_SECONDS)
     target = min(total, max_frames) if total > 0 else max_frames
 
-    tracker, items, out, idx = SimpleTracker(), [], None, 0
+    def report(frac):
+        if on_progress:
+            on_progress(min(frac, 1.0))
+
+    # Pass 1: find faces and follow every person through the video.
+    tracker, per_frame, current, n = SimpleTracker(), [], [], 0
+    for idx, frame in read_frames(in_path, max_frames):
+        if idx % stride == 0:
+            res = model.predict(frame, conf=conf, iou=iou, agnostic_nms=True, verbose=False)[0]  # frame is BGR, as YOLO expects
+            dets = []
+            if res.boxes is not None:
+                for b in res.boxes:
+                    box = tuple(float(v) for v in b.xyxy[0].tolist())
+                    dets.append((box, int(b.cls[0]), float(b.conf[0])))
+            current = [(box, tid) for box, tid, _ in tracker.update(dedupe(dets))]
+        per_frame.append(current)
+        n = idx + 1
+        if idx % 3 == 0:
+            report(0.8 * n / max(target, 1))
+    if n == 0:
+        raise ValueError("No frames could be read from this video.")
+
+    # Each person gets ONE age group for the whole video: the one with the most confidence votes.
+    checks = -(-n // stride)
+    final = tracker.final(min_hits=3 if checks >= 8 else 1)
+
+    # Pass 2: draw the steady labels and write the video.
+    out = None
     try:
-        while idx < max_frames:
-            ok, frame = cap.read()
-            if not ok:
+        for idx, frame in read_frames(in_path, n):
+            if idx >= len(per_frame):
                 break
-            h, w = frame.shape[:2]
-            scale = min(1.0, MAX_SIDE / max(h, w))
-            if scale < 1.0:
-                frame = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-            h, w = frame.shape[:2]
-            h, w = h - h % 2, w - w % 2          # H.264 needs even sizes
-            frame = frame[:h, :w]
-
-            if idx % stride == 0:
-                res = model.predict(frame, conf=conf, iou=iou, verbose=False)[0]   # frame is BGR, as YOLO expects
-                dets = []
-                if res.boxes is not None:
-                    for b in res.boxes:
-                        box = tuple(float(v) for v in b.xyxy[0].tolist())
-                        dets.append((box, int(b.cls[0]), float(b.conf[0])))
-                items = [(*box, names[cls], cf) for box, cls, cf in tracker.update(dets)]
-
+            items = []
+            for box, tid in per_frame[idx]:
+                if tid in final:
+                    cls, cf = final[tid]
+                    items.append((*box, names[cls], cf))
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             drawn = np.asarray(draw_boxes(Image.fromarray(rgb), items, color_map))
             if out is None:
-                out = VideoOut(out_path, fps, (w, h))
+                out = VideoOut(out_path, fps, (frame.shape[1], frame.shape[0]))
             out.write(drawn)
-            idx += 1
-            if on_progress and idx % 3 == 0:
-                on_progress(min(idx / max(target, 1), 1.0))
-
-        trimmed = False
-        if idx >= max_frames:
-            trimmed = cap.read()[0]
+            if idx % 3 == 0:
+                report(0.8 + 0.2 * (idx + 1) / n)
     finally:
-        cap.release()
         if out is not None:
             out.close()
-
-    if idx == 0:
+    if out is None:
         raise ValueError("No frames could be read from this video.")
 
     groups = {}
-    for cls in tracker.people():
+    for cls, _ in final.values():
         groups[names[cls]] = groups.get(names[cls], 0) + 1
     return {
-        "people": sum(groups.values()), "groups": groups, "seconds": idx / fps,
-        "trimmed": trimmed, "playable": out.playable,
+        "people": sum(groups.values()), "groups": groups, "seconds": n / fps,
+        "trimmed": (total > max_frames) if total > 0 else n >= max_frames,
+        "playable": out.playable,
     }
-
 
 def render_video_panel():
     vid = st.file_uploader(
@@ -627,7 +664,6 @@ def render_video_panel():
             note += f" Only the first {MAX_SECONDS} seconds were used."
         st.markdown(f'<p class="ag-fine">{note}</p>', unsafe_allow_html=True)
 
-
 # ---------------------------------------------------------------------------
 # Model
 # ---------------------------------------------------------------------------
@@ -662,7 +698,7 @@ with st.sidebar:
 
     st.markdown('<p class="ag-side-title">Detection settings</p>', unsafe_allow_html=True)
     conf_thres = st.slider(
-        "Minimum confidence", 0.05, 0.90, 0.25, 0.05,
+        "Minimum confidence", 0.05, 0.90, 0.40, 0.05,
         help="Lower it to catch more faces. Raise it to keep only the surest predictions.",
     )
     iou_thres = st.slider(
@@ -735,7 +771,7 @@ with tab1:
         image.thumbnail((1600, 1600))
 
         with st.spinner("Looking for faces..."):
-            result = model.predict(image, conf=conf_thres, iou=iou_thres, verbose=False)[0]
+            result = model.predict(image, conf=conf_thres, iou=iou_thres, agnostic_nms=True, verbose=False)[0]
 
         boxes = result.boxes
         n = 0 if boxes is None else len(boxes)
